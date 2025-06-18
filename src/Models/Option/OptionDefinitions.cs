@@ -741,4 +741,26 @@ public static class OptionDefinitions
             IsRequired = false
         };
     }
+
+    public static class AI
+    {
+        public const string ServiceName = "service-name";
+        public const string ModelName = "model-name";
+
+        public static readonly Option<string> Service = new(
+            $"--{ServiceName}",
+            "The name of the Azure AI service (e.g., my-openai-service)."
+        )
+        {
+            IsRequired = true
+        };
+
+        public static readonly Option<string> Model = new(
+            $"--{ModelName}",
+            "The name of the AI model to filter by."
+        )
+        {
+            IsRequired = false
+        };
+    }
 }

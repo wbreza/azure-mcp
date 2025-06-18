@@ -77,12 +77,11 @@ public class CommandFactory
         }
 
         throw new KeyNotFoundException($"Group '{groupName}' not found in command groups.");
-    }
-
-    private void RegisterCommandGroup()
+    }    private void RegisterCommandGroup()
     {
         // Register top-level command groups
         RegisterBestPracticesCommand();
+        RegisterAICommands();
         RegisterCosmosCommands();
         RegisterKeyVaultCommands();
         RegisterKustoCommands();
@@ -114,6 +113,28 @@ public class CommandFactory
             "get",
             new BestPractices.AzureBestPracticesGetCommand(GetLogger<BestPractices.AzureBestPracticesGetCommand>())
         );
+    }
+
+    private void RegisterAICommands()
+    {
+        // Create AI command group
+        var ai = new CommandGroup("ai", "Azure AI operations - Commands for managing and querying Azure AI services, models, and deployments.");
+        _rootGroup.AddSubGroup(ai);
+
+        // Create AI subgroups
+        var accounts = new CommandGroup("account", "AI service account operations - Commands for listing AI service accounts in your subscription.");
+        ai.AddSubGroup(accounts);
+
+        var models = new CommandGroup("model", "AI model operations - Commands for listing available models in AI services.");
+        ai.AddSubGroup(models);
+
+        var deployments = new CommandGroup("deployment", "AI deployment operations - Commands for listing model deployments in AI services.");
+        ai.AddSubGroup(deployments);
+
+        // Register AI commands
+        accounts.AddCommand("list", new AI.Account.AccountListCommand(GetLogger<AI.Account.AccountListCommand>()));
+        models.AddCommand("list", new AI.Model.ModelListCommand(GetLogger<AI.Model.ModelListCommand>()));
+        deployments.AddCommand("list", new AI.Deployment.DeploymentListCommand(GetLogger<AI.Deployment.DeploymentListCommand>()));
     }
 
     private void RegisterCosmosCommands()

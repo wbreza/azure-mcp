@@ -6,6 +6,7 @@ using AzureMcp.Commands;
 using AzureMcp.Services.Azure.AppConfig;
 using AzureMcp.Services.Azure.Authorization;
 using AzureMcp.Services.Azure.AzureIsv.Datadog;
+using AzureMcp.Services.Azure.AI;
 using AzureMcp.Services.Azure.Cosmos;
 using AzureMcp.Services.Azure.KeyVault;
 using AzureMcp.Services.Azure.Kusto;
@@ -95,8 +96,8 @@ internal class Program
         services.AddSingleton<ICacheService, CacheService>();
         services.AddSingleton<IExternalProcessService, ExternalProcessService>();
         services.AddSingleton<ISubscriptionService, SubscriptionService>();
-        services.AddSingleton<ITenantService, TenantService>();
-        services.AddSingleton<ICosmosService, CosmosService>();
+        services.AddSingleton<ITenantService, TenantService>();        services.AddSingleton<ICosmosService, CosmosService>();
+        services.AddSingleton<IAIService, AIService>();
         services.AddSingleton<IKustoService, KustoService>();
         services.AddSingleton<IDatadogService, DatadogService>();
         services.AddSingleton<IStorageService, StorageService>();
