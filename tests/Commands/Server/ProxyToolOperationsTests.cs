@@ -20,7 +20,7 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
 
         var expectedMetadata = new List<McpServerMetadata>
@@ -29,9 +29,9 @@ public class ProxyToolOperationsTests
             new() { Id = "keyvault", Name = "keyvault", Description = "Azure Key Vault operations" }
         };
 
-        mockMcpClientService.ListProviderMetadata().Returns(expectedMetadata);
+        mockMcpClientService.ListProviderMetadataAsync().Returns(expectedMetadata);
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<ListToolsRequestParams>(mockServer)
         {
             Params = new ListToolsRequestParams()
@@ -55,7 +55,7 @@ public class ProxyToolOperationsTests
         Assert.Contains("Azure Key Vault operations", keyvaultToolResult.Description);
 
         // Verify that the mock was called
-        mockMcpClientService.Received(1).ListProviderMetadata();
+        await mockMcpClientService.Received(1).ListProviderMetadataAsync();
     }
 
     [Fact]
@@ -63,12 +63,12 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
 
-        mockMcpClientService.ListProviderMetadata().Returns(new List<McpServerMetadata>());
+        mockMcpClientService.ListProviderMetadataAsync().Returns(new List<McpServerMetadata>());
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<ListToolsRequestParams>(mockServer)
         {
             Params = new ListToolsRequestParams()
@@ -82,7 +82,7 @@ public class ProxyToolOperationsTests
         Assert.Empty(result.Tools);
 
         // Verify that the mock was called
-        mockMcpClientService.Received(1).ListProviderMetadata();
+        await mockMcpClientService.Received(1).ListProviderMetadataAsync();
     }
 
     [Fact]
@@ -90,10 +90,10 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<CallToolRequestParams>(mockServer)
         {
             Params = new CallToolRequestParams
@@ -113,10 +113,10 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<CallToolRequestParams>(mockServer)
         {
             Params = new CallToolRequestParams
@@ -135,7 +135,7 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
         var mockClient = Substitute.For<IMcpClient>();
 
@@ -160,7 +160,7 @@ public class ProxyToolOperationsTests
         mockMcpClientService.GetProviderClientAsync("storage", Arg.Any<McpClientOptions>())
             .Returns(mockClient);
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<CallToolRequestParams>(mockServer)
         {
             Params = new CallToolRequestParams
@@ -189,7 +189,7 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
         var mockClient = Substitute.For<IMcpClient>();
 
@@ -213,7 +213,7 @@ public class ProxyToolOperationsTests
         mockMcpClientService.GetProviderClientAsync("storage", Arg.Any<McpClientOptions>())
             .Returns(mockClient);
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<CallToolRequestParams>(mockServer)
         {
             Params = new CallToolRequestParams
@@ -241,10 +241,10 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<CallToolRequestParams>(mockServer)
         {
             Params = new CallToolRequestParams
@@ -269,7 +269,7 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
         var mockClient = Substitute.For<IMcpClient>();
 
@@ -308,7 +308,7 @@ public class ProxyToolOperationsTests
         mockMcpClientService.GetProviderClientAsync("storage", Arg.Any<McpClientOptions>())
             .Returns(mockClient);
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<CallToolRequestParams>(mockServer)
         {
             Params = new CallToolRequestParams
@@ -344,13 +344,13 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
 
         mockMcpClientService.GetProviderClientAsync("storage", Arg.Any<McpClientOptions>())
             .Returns(Task.FromResult<IMcpClient?>(null));
 
-        var proxyToolOperations = new ProxyToolOperations(mockMcpClientService, mockLogger);
+        var proxyToolOperations = new ServerToolLoader(mockMcpClientService, mockLogger);
         var request = new RequestContext<CallToolRequestParams>(mockServer)
         {
             Params = new CallToolRequestParams
@@ -377,7 +377,7 @@ public class ProxyToolOperationsTests
     {
         // Arrange
         var mockMcpClientService = Substitute.For<IMcpClientService>();
-        var mockLogger = Substitute.For<ILogger<ProxyToolOperations>>();
+        var mockLogger = Substitute.For<ILogger<ServerToolLoader>>();
         var mockServer = Substitute.For<IMcpServer>();
         var mockClient = Substitute.For<IMcpClient>();
 
@@ -416,7 +416,7 @@ public class ProxyToolOperationsTests
         };
 
         // Act: ReadOnly = false (should return all tools)
-        var proxyToolOperationsAll = new ProxyToolOperations(mockMcpClientService, mockLogger)
+        var proxyToolOperationsAll = new ServerToolLoader(mockMcpClientService, mockLogger)
         {
             ReadOnly = false
         };
@@ -429,7 +429,7 @@ public class ProxyToolOperationsTests
         Assert.Contains("no-annotation-tool", textAll);
 
         // Act: ReadOnly = true (should return only readonly tools)
-        var proxyToolOperationsReadonly = new ProxyToolOperations(mockMcpClientService, mockLogger)
+        var proxyToolOperationsReadonly = new ServerToolLoader(mockMcpClientService, mockLogger)
         {
             ReadOnly = true
         };

@@ -65,7 +65,7 @@ namespace AzureMcp.Tests.Commands.Server.Tools
                 });
 
             var fakeService = Substitute.For<IMcpClientService>();
-            fakeService.ListProviderMetadata().Returns([
+            fakeService.ListProviderMetadataAsync().Returns([
                 new McpServerMetadata { Id = "storage", Name = "storage", Description = "Contains tools for storage" },
                 new McpServerMetadata { Id = "keyvault", Name = "keyvault", Description = "Contains tools for keyvault" }
             ]);

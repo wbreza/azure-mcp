@@ -2,14 +2,16 @@
 // Licensed under the MIT License.
 
 using System.Text.Json.Serialization;
-using AzureMcp.Commands.Server.Tools;
 using Json.Schema;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using AzureMcp.Commands.Server.Discovery;
+using Microsoft.Extensions.Options;
+using AzureMcp.Options.Server;
 
-namespace AzureMcp.Commands.Server;
+namespace AzureMcp.Commands.Server.ToolLoading;
 
 [JsonSerializable(typeof(JsonSchema))]
 [JsonSerializable(typeof(Tool))]
@@ -20,18 +22,20 @@ namespace AzureMcp.Commands.Server;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     WriteIndented = true
 )]
-internal partial class ProxyToolOperationsSerializationContext : JsonSerializerContext
+internal partial class ServerToolLoaderSerializationContext : JsonSerializerContext
 {
 }
 
-public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<ProxyToolOperations> logger)
+public sealed class ServerToolLoader(IMcpDiscoveryStrategy serverDiscoveryStrategy, IOptions<ServiceStartOptions> options, ILogger<ServerToolLoader> logger) : IToolLoader
 {
-    private readonly IMcpClientService _mcpClientService = mcpClientService;
-    private readonly ILogger<ProxyToolOperations> _logger = logger;
+    private readonly IMcpDiscoveryStrategy _serverDiscoveryStrategy = serverDiscoveryStrategy;
+    private readonly IOptions<ServiceStartOptions> _options = options;
+    private readonly ILogger<ServerToolLoader> _logger = logger;
     private readonly Dictionary<string, List<Tool>> _cachedToolLists = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly string ToolCallProxySchemaJson = JsonSerializer.Serialize(ToolCallProxySchema, ProxyToolOperationsSerializationContext.Default.JsonSchema);
+    private static readonly string ToolCallProxySchemaJson = JsonSerializer.Serialize(ToolCallProxySchema, ServerToolLoaderSerializationContext.Default.JsonSchema);
 
     public bool ReadOnly { get; set; } = false;
+    public string? Namespace { get; set; } = null;
 
     private static readonly JsonSchema ToolSchema = new JsonSchemaBuilder()
         .Type(SchemaValueType.Object)
@@ -73,10 +77,18 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
         .AdditionalProperties(false)
         .Build();
 
-    public ValueTask<ListToolsResult> ListToolsHandler(RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken)
+    public async ValueTask<ListToolsResult> ListToolsHandler(RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken)
     {
-        var tools = _mcpClientService.ListProviderMetadata()
-            .Select(metadata => new Tool
+        var serverList = await _serverDiscoveryStrategy.DiscoverServersAsync();
+        var allToolsResponse = new ListToolsResult
+        {
+            Tools = new List<Tool>()
+        };
+
+        foreach (var server in serverList)
+        {
+            var metadata = server.CreateMetadata();
+            var tool = new Tool
             {
                 Name = metadata.Name,
                 Description = metadata.Description + """
@@ -85,15 +97,13 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
                     To invoke a command, set "command" and wrap its args in "parameters".
                     Set "learn=true" to discover available sub commands.
                     """,
-                InputSchema = JsonSerializer.SerializeToElement(ToolSchema, ProxyToolOperationsSerializationContext.Default.JsonSchema),
-            });
+                InputSchema = JsonSerializer.SerializeToElement(ToolSchema, ServerToolLoaderSerializationContext.Default.JsonSchema),
+            };
 
-        var listToolsResult = new ListToolsResult
-        {
-            Tools = [.. tools],
-        };
+            allToolsResponse.Tools.Add(tool);
+        }
 
-        return ValueTask.FromResult(listToolsResult);
+        return allToolsResponse;
     }
 
     public async ValueTask<CallToolResponse> CallToolHandler(RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken)
@@ -158,12 +168,27 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
 
     private async Task<CallToolResponse> InvokeChildToolAsync(RequestContext<CallToolRequestParams> request, string? intent, string tool, string command, Dictionary<string, object?> parameters, CancellationToken cancellationToken)
     {
-        IMcpClient? client;
+        if (request.Params == null)
+        {
+            var content = new Content
+            {
+                Text = "Cannot call tools with null parameters.",
+            };
 
+            _logger.LogWarning(content.Text);
+
+            return new CallToolResponse
+            {
+                Content = [content],
+                IsError = true,
+            };
+        }
+
+        IMcpClient client;
         try
         {
             var clientOptions = CreateClientOptions(request.Server);
-            client = await _mcpClientService.GetProviderClientAsync(tool, clientOptions);
+            client = await _serverDiscoveryStrategy.GetOrCreateClientAsync(tool, clientOptions);
             if (client == null)
             {
                 _logger.LogError("Failed to get provider client for tool: {Tool}", tool);
@@ -320,8 +345,13 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
             return cachedList;
         }
 
+        if (string.IsNullOrWhiteSpace(request.Params?.Name))
+        {
+            throw new ArgumentNullException(nameof(request.Params.Name), "Tool name cannot be null or empty.");
+        }
+
         var clientOptions = CreateClientOptions(request.Server);
-        var client = await _mcpClientService.GetProviderClientAsync(tool, clientOptions);
+        var client = await _serverDiscoveryStrategy.GetOrCreateClientAsync(request.Params.Name, clientOptions);
         if (client == null)
         {
             return [];
@@ -346,7 +376,7 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
     private async Task<string> GetChildToolListJsonAsync(RequestContext<CallToolRequestParams> request, string tool)
     {
         var listTools = await GetChildToolListAsync(request, tool);
-        return JsonSerializer.Serialize(listTools, AzureProxyToolSerializationContext.Default.ListTool);
+        return JsonSerializer.Serialize(listTools, SingleProxyToolLoaderSerializationContext.Default.ListTool);
     }
 
     private async Task<Tool> GetChildToolAsync(RequestContext<CallToolRequestParams> request, string toolName, string commandName)
@@ -358,7 +388,7 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
     private async Task<string> GetChildToolJsonAsync(RequestContext<CallToolRequestParams> request, string toolName, string commandName)
     {
         var tool = await GetChildToolAsync(request, toolName, commandName);
-        return JsonSerializer.Serialize(tool, ProxyToolOperationsSerializationContext.Default.Tool);
+        return JsonSerializer.Serialize(tool, ServerToolLoaderSerializationContext.Default.Tool);
     }
 
     private static bool SupportsSampling(IMcpServer server)
@@ -391,8 +421,8 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
         await NotifyProgressAsync(request, $"Learning about {tool} capabilities...", cancellationToken);
 
         var toolParams = GetParametersDictionary(request.Params?.Arguments);
-        var toolParamsJson = JsonSerializer.Serialize(toolParams, ProxyToolOperationsSerializationContext.Default.DictionaryStringObject);
-        var availableToolsJson = JsonSerializer.Serialize(availableTools, ProxyToolOperationsSerializationContext.Default.ListTool);
+        var toolParamsJson = JsonSerializer.Serialize(toolParams, ServerToolLoaderSerializationContext.Default.DictionaryStringObject);
+        var availableToolsJson = JsonSerializer.Serialize(availableTools, ServerToolLoaderSerializationContext.Default.ListTool);
 
         var samplingRequest = new CreateMessageRequestParams
         {
@@ -443,7 +473,7 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
                 }
                 if (root.TryGetProperty("parameters", out var paramsProp) && paramsProp.ValueKind == JsonValueKind.Object)
                 {
-                    parameters = JsonSerializer.Deserialize(paramsProp.GetRawText(), ProxyToolOperationsSerializationContext.Default.DictionaryStringObject) ?? [];
+                    parameters = JsonSerializer.Deserialize(paramsProp.GetRawText(), ServerToolLoaderSerializationContext.Default.DictionaryStringObject) ?? [];
                 }
             }
             if (commandName != null && commandName != "Unknown")
@@ -463,7 +493,7 @@ public class ProxyToolOperations(IMcpClientService mcpClientService, ILogger<Pro
     {
         if (args != null && args.TryGetValue("parameters", out var parametersElem) && parametersElem.ValueKind == JsonValueKind.Object)
         {
-            return JsonSerializer.Deserialize(parametersElem.GetRawText(), ProxyToolOperationsSerializationContext.Default.DictionaryStringObject) ?? [];
+            return JsonSerializer.Deserialize(parametersElem.GetRawText(), ServerToolLoaderSerializationContext.Default.DictionaryStringObject) ?? [];
         }
 
         return [];

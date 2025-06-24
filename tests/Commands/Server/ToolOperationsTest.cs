@@ -32,13 +32,13 @@ public class ToolOperationsTest
     private readonly CommandFactory _commandFactory;
     private readonly IServiceProvider _serviceProvider;
     private readonly IKeyVaultService _keyVaultService;
-    private readonly ILogger<ToolOperations> _logger;
+    private readonly ILogger<CommandFactoryToolLoader> _logger;
     private readonly ILogger<CommandFactory> _commandFactoryLogger;
     private readonly IMcpServer _server;
 
     public ToolOperationsTest()
     {
-        _logger = Substitute.For<ILogger<ToolOperations>>();
+        _logger = Substitute.For<ILogger<CommandFactoryToolLoader>>();
         _commandFactoryLogger = Substitute.For<ILogger<CommandFactory>>();
         _server = Substitute.For<IMcpServer>();
         _keyVaultService = Substitute.For<IKeyVaultService>();
@@ -53,10 +53,10 @@ public class ToolOperationsTest
     [Fact]
     public async Task GetsAllTools()
     {
-        var operations = new ToolOperations(_serviceProvider, _commandFactory, _logger);
+        var operations = new CommandFactoryToolLoader(_serviceProvider, _commandFactory, _logger);
         var requestContext = new RequestContext<ListToolsRequestParams>(_server);
 
-        var handler = operations.ToolsCapability.ListToolsHandler;
+        var handler = operations.ListToolsHandler;
 
         Assert.NotNull(handler);
 
@@ -106,12 +106,12 @@ public class ToolOperationsTest
     [InlineData("group")]
     public async Task GetsToolsByCommandGroup(string? commandGroup)
     {
-        var operations = new ToolOperations(_serviceProvider, _commandFactory, _logger)
+        var operations = new CommandFactoryToolLoader(_serviceProvider, _commandFactory, _logger)
         {
-            CommandGroup = commandGroup
+            Namespace = commandGroup
         };
         var requestContext = new RequestContext<ListToolsRequestParams>(_server);
-        var handler = operations.ToolsCapability.ListToolsHandler;
+        var handler = operations.ListToolsHandler;
         Assert.NotNull(handler);
         var result = await handler(requestContext, CancellationToken.None);
         Assert.NotNull(result);
@@ -138,12 +138,12 @@ public class ToolOperationsTest
     {
         var ex = await Assert.ThrowsAsync<KeyNotFoundException>(async () =>
         {
-            var operations = new ToolOperations(_serviceProvider, _commandFactory, _logger)
+            var operations = new CommandFactoryToolLoader(_serviceProvider, _commandFactory, _logger)
             {
-                CommandGroup = "unknown-group"
+                Namespace = "unknown-group"
             };
             var requestContext = new RequestContext<ListToolsRequestParams>(_server);
-            var handler = operations.ToolsCapability.ListToolsHandler;
+            var handler = operations.ListToolsHandler;
             Assert.NotNull(handler);
             await handler(requestContext, CancellationToken.None);
         });
@@ -154,12 +154,12 @@ public class ToolOperationsTest
     public async Task ReadOnlyMode_FiltersToolsByReadOnlyHint()
     {
         // Run with ReadOnly = false
-        var operations = new ToolOperations(_serviceProvider, _commandFactory, _logger)
+        var operations = new CommandFactoryToolLoader(_serviceProvider, _commandFactory, _logger)
         {
             ReadOnly = false
         };
         var requestContext = new RequestContext<ListToolsRequestParams>(_server);
-        var handler = operations.ToolsCapability.ListToolsHandler;
+        var handler = operations.ListToolsHandler;
         Assert.NotNull(handler);
         var allToolsResult = await handler(requestContext, CancellationToken.None);
         Assert.NotNull(allToolsResult);

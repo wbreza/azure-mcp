@@ -2,58 +2,57 @@
 // Licensed under the MIT License.
 
 using System.Reflection;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using AzureMcp.Commands.Extensions;
+using AzureMcp.Options.Server;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 
-namespace AzureMcp.Commands.Server;
+namespace AzureMcp.Commands.Server.ToolLoading;
 
-public class ToolOperations
+public sealed class CommandFactoryToolLoader : IToolLoader
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly CommandFactory _commandFactory;
+    private readonly IOptions<ServiceStartOptions> _options;
     private IReadOnlyDictionary<string, IBaseCommand> _toolCommands;
-    private readonly ILogger<ToolOperations> _logger;
-    private string _commandGroup = string.Empty;
+    private readonly ILogger<CommandFactoryToolLoader> _logger;
 
-    public ToolOperations(IServiceProvider serviceProvider, CommandFactory commandFactory, ILogger<ToolOperations> logger)
+    public CommandFactoryToolLoader(IServiceProvider serviceProvider, CommandFactory commandFactory, IOptions<ServiceStartOptions> options, ILogger<CommandFactoryToolLoader> logger)
     {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(commandFactory);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(logger);
+
         _serviceProvider = serviceProvider;
         _commandFactory = commandFactory;
+        _options = options;
         _logger = logger;
-        _toolCommands = _commandFactory.AllCommands;
 
-        ToolsCapability = new ToolsCapability
+        if (string.IsNullOrWhiteSpace(Namespace))
         {
-            CallToolHandler = OnCallTools,
-            ListToolsHandler = OnListTools,
-        };
-    }
-
-    public ToolsCapability ToolsCapability { get; }
-
-    public bool ReadOnly { get; set; } = false;
-
-    public string? CommandGroup
-    {
-        get => _commandGroup;
-        set
+            _toolCommands = _commandFactory.AllCommands;
+        }
+        else
         {
-            _commandGroup = value ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(_commandGroup))
-            {
-                _toolCommands = _commandFactory.AllCommands;
-            }
-            else
-            {
-                _toolCommands = _commandFactory.GroupCommands(_commandGroup);
-            }
+            _toolCommands = _commandFactory.GroupCommands(Namespace);
         }
     }
-    private ValueTask<ListToolsResult> OnListTools(RequestContext<ListToolsRequestParams> requestContext, CancellationToken cancellationToken)
+
+    private bool ReadOnly
+    {
+        get => _options.Value.ReadOnly ?? false;
+    }
+
+    private string? Namespace
+    {
+        get => _options.Value.Service;
+    }
+
+    public ValueTask<ListToolsResult> ListToolsHandler(RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken)
     {
         var tools = CommandFactory.GetVisibleCommands(_toolCommands)
             .Select(kvp => GetTool(kvp.Key, kvp.Value))
@@ -67,10 +66,9 @@ public class ToolOperations
         return ValueTask.FromResult(listToolsResult);
     }
 
-    private async ValueTask<CallToolResponse> OnCallTools(RequestContext<CallToolRequestParams> parameters,
-        CancellationToken cancellationToken)
+    public async ValueTask<CallToolResponse> CallToolHandler(RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken)
     {
-        if (parameters.Params == null)
+        if (request.Params == null)
         {
             var content = new Content
             {
@@ -86,12 +84,12 @@ public class ToolOperations
             };
         }
 
-        var command = _toolCommands.GetValueOrDefault(parameters.Params.Name);
+        var command = _toolCommands.GetValueOrDefault(request.Params.Name);
         if (command == null)
         {
             var content = new Content
             {
-                Text = $"Could not find command: {parameters.Params.Name}",
+                Text = $"Could not find command: {request.Params.Name}",
             };
 
             _logger.LogWarning(content.Text);
@@ -105,7 +103,7 @@ public class ToolOperations
         var commandContext = new CommandContext(_serviceProvider);
 
         var realCommand = command.GetCommand();
-        var commandOptions = realCommand.ParseFromDictionary(parameters.Params.Arguments);
+        var commandOptions = realCommand.ParseFromDictionary(request.Params.Arguments);
 
         _logger.LogTrace("Invoking '{Tool}'.", realCommand.Name);
 

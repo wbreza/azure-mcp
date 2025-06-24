@@ -4,11 +4,25 @@
 using System.Reflection;
 using AzureMcp.Models.Server;
 
-namespace AzureMcp.Commands.Server;
+namespace AzureMcp.Commands.Server.Discovery;
 
-public static class RegistryLoader
+public sealed class RegistryDiscoveryStrategy : BaseDiscoveryStrategy
 {
-    public static async Task<RegistryRoot?> LoadRegistryAsync()
+    public override async Task<IEnumerable<IMcpServerProvider>> DiscoverServersAsync()
+    {
+        var registryRoot = await LoadRegistryAsync();
+        if (registryRoot == null)
+        {
+            return Enumerable.Empty<IMcpServerProvider>();
+        }
+
+        return registryRoot
+            .Servers
+            .Select(s => new RegistryServerProvider(s.Key, s.Value))
+            .Cast<IMcpServerProvider>();
+    }
+
+    private async Task<RegistryRoot?> LoadRegistryAsync()
     {
         var assembly = Assembly.GetExecutingAssembly();
         var resourceName = assembly

@@ -8,5 +8,5 @@ namespace AzureMcp.Models.Server;
 public sealed class RegistryRoot
 {
     [JsonPropertyName("servers")]
-    public Dictionary<string, RegistryServerInfo>? Servers { get; init; }
+    public Dictionary<string, RegistryServerInfo> Servers { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 }

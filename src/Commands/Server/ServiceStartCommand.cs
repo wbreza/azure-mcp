@@ -2,7 +2,8 @@
 // Licensed under the MIT License.
 
 using System.Reflection;
-using AzureMcp.Commands.Server.Tools;
+using AzureMcp.Commands.Server.Runtime;
+using AzureMcp.Commands.Server.ToolLoading;
 using AzureMcp.Models.Option;
 using AzureMcp.Options.Server;
 using Microsoft.AspNetCore.Builder;
@@ -82,6 +83,7 @@ public sealed class ServiceStartCommand : BaseCommand
                 .ConfigureKestrel(server => server.ListenAnyIP(serverOptions.Port))
                 .ConfigureLogging(logging =>
                 {
+                    logging.SetMinimumLevel(LogLevel.Information);
                     logging.AddEventSourceLogger();
                 });
 
@@ -96,8 +98,10 @@ public sealed class ServiceStartCommand : BaseCommand
             return Host.CreateDefaultBuilder()
                 .ConfigureLogging(logging =>
                 {
+                    logging.SetMinimumLevel(LogLevel.Information);
                     logging.ClearProviders();
                     logging.AddEventSourceLogger();
+                    logging.AddConsole();
                 })
                 .ConfigureServices(services =>
                 {
@@ -110,73 +114,9 @@ public sealed class ServiceStartCommand : BaseCommand
 
     private static void ConfigureMcpServer(IServiceCollection services, ServiceStartOptions options)
     {
-        services.AddSingleton<ToolOperations>();
-        services.AddSingleton<ProxyToolOperations>();
-        services.AddSingleton<IMcpClientService, McpClientService>();
         services.AddSingleton<AzureEventSourceLogForwarder>();
         services.AddHostedService<OtelService>();
-
-        var mcpServerOptionsBuilder = services.AddOptions<McpServerOptions>();
-        var entryAssembly = Assembly.GetEntryAssembly();
-        var assemblyName = entryAssembly?.GetName();
-        var serverName = entryAssembly?.GetCustomAttribute<AssemblyTitleAttribute>()?.Title ?? "Azure MCP Server";
-
-        mcpServerOptionsBuilder.Configure(mcpServerOptions =>
-        {
-            mcpServerOptions.ProtocolVersion = "2024-11-05";
-            mcpServerOptions.ServerInfo = new Implementation
-            {
-                Name = serverName,
-                Version = assemblyName?.Version?.ToString() ?? "1.0.0-beta"
-            };
-        });
-
-        // The "azure" mode contains a single "azure" tools that performs internal tool discovery and proxying.
-        if (options.Service == "azure")
-        {
-            services.AddSingleton<McpServerTool, AzureProxyTool>();
-        }
-        // The "proxy" mode exposes a single tool per service/namespace and performs internal tool discovery and proxying.
-        else if (options.Service == "proxy")
-        {
-            mcpServerOptionsBuilder.Configure<ProxyToolOperations>((mcpServerOptions, toolOperations) =>
-            {
-                toolOperations.ReadOnly = options.ReadOnly ?? false;
-                mcpServerOptions.Capabilities = new ServerCapabilities
-                {
-                    Tools = new ToolsCapability()
-                    {
-                        CallToolHandler = toolOperations.CallToolHandler,
-                        ListToolsHandler = toolOperations.ListToolsHandler,
-                    }
-                };
-            });
-        }
-        // The default mode loads all tools from the default ToolOperations service.
-        else
-        {
-            mcpServerOptionsBuilder.Configure<ToolOperations>((mcpServerOptions, toolOperations) =>
-            {
-                toolOperations.ReadOnly = options.ReadOnly ?? false;
-                toolOperations.CommandGroup = options.Service;
-
-                mcpServerOptions.Capabilities = new ServerCapabilities
-                {
-                    Tools = toolOperations.ToolsCapability
-                };
-            });
-        }
-
-        var mcpServerBuilder = services.AddMcpServer();
-
-        if (options.Transport != TransportTypes.Sse)
-        {
-            mcpServerBuilder.WithStdioServerTransport();
-        }
-        else
-        {
-            mcpServerBuilder.WithHttpTransport();
-        }
+        services.AddAzureMcpServer(options);
     }
 
     private sealed class StdioMcpServerHostedService(IMcpServer session) : BackgroundService

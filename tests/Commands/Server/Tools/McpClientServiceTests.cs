@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Text.Json;
+using System.Threading.Tasks;
 using AzureMcp.Commands;
 using AzureMcp.Commands.Server;
 using AzureMcp.Commands.Server.Tools;
@@ -34,7 +35,7 @@ namespace AzureMcp.Tests.Commands.Server.Tools
         public async Task Constructor_PopulatesProviders()
         {
             var service = new McpClientService(_commandFactory, _mcpClientServiceLogger);
-            var metadata = service.ListProviderMetadata();
+            var metadata = await service.ListProviderMetadataAsync();
             Assert.NotEmpty(metadata);
 
             // Calculate expected command group providers (excluding ignored groups)
@@ -43,7 +44,8 @@ namespace AzureMcp.Tests.Commands.Server.Tools
                 .Count();
 
             // Get expected registry providers by loading the registry directly
-            var registry = await RegistryLoader.LoadRegistryAsync();
+            var registryLoader = new RegistryLoader();
+            var registry = await registryLoader.LoadRegistryAsync();
             var expectedRegistryProviders = registry?.Servers?.Count ?? 0;
 
             var expectedTotalProviders = expectedCommandGroups + expectedRegistryProviders;
@@ -53,10 +55,10 @@ namespace AzureMcp.Tests.Commands.Server.Tools
         }
 
         [Fact]
-        public void ListProviderMetadata_ReturnsAllMetadata()
+        public async Task ListProviderMetadata_ReturnsAllMetadata()
         {
             var service = new McpClientService(_commandFactory, _mcpClientServiceLogger);
-            var metadata = service.ListProviderMetadata();
+            var metadata = await service.ListProviderMetadataAsync();
             Assert.All(metadata, m =>
             {
                 Assert.False(string.IsNullOrWhiteSpace(m.Id));
@@ -71,7 +73,8 @@ namespace AzureMcp.Tests.Commands.Server.Tools
             {
                 EntryPoint = _entryPoint
             };
-            var firstMeta = service.ListProviderMetadata()[0];
+            var allMetadata = await service.ListProviderMetadataAsync();
+            var firstMeta = allMetadata[0];
             var options = new McpClientOptions();
             var client = await service.GetProviderClientAsync(firstMeta.Id, options);
             Assert.NotNull(client);
@@ -115,11 +118,11 @@ namespace AzureMcp.Tests.Commands.Server.Tools
         }
 
         [Fact]
-        public void Constructor_IncludesRegistryProviders_WhenRegistryExists()
+        public async Task Constructor_IncludesRegistryProviders_WhenRegistryExists()
         {
             // This test assumes a registry.json exists in resources, but if not, it should still pass
             var service = new McpClientService(_commandFactory, _mcpClientServiceLogger);
-            var metadata = service.ListProviderMetadata();
+            var metadata = await service.ListProviderMetadataAsync();
 
             // Check if any providers have descriptions that suggest they came from registry
             // Registry providers typically have more detailed descriptions than command groups
@@ -243,13 +246,13 @@ namespace AzureMcp.Tests.Commands.Server.Tools
         }
 
         [Fact]
-        public void McpClientService_ListProviderMetadata_IncludesBothCommandGroupAndRegistryProviders()
+        public async Task McpClientService_ListProviderMetadata_IncludesBothCommandGroupAndRegistryProviders()
         {
             // Arrange
             var service = new McpClientService(_commandFactory, _mcpClientServiceLogger);
 
             // Act
-            var metadata = service.ListProviderMetadata();
+            var metadata = await service.ListProviderMetadataAsync();
 
             // Assert
             Assert.NotEmpty(metadata);
@@ -275,7 +278,8 @@ namespace AzureMcp.Tests.Commands.Server.Tools
             var service = new McpClientService(_commandFactory, _mcpClientServiceLogger);
             service.EntryPoint = _entryPoint;
 
-            var firstMeta = service.ListProviderMetadata().First();
+            var allMetadata = await service.ListProviderMetadataAsync();
+            var firstMeta = allMetadata.First();
             var options = new McpClientOptions();
 
             // Act
@@ -306,7 +310,8 @@ namespace AzureMcp.Tests.Commands.Server.Tools
         public async Task RegistryLoader_LoadRegistryAsync_ReturnsNullIfNoRegistry()
         {
             // Act
-            var registry = await RegistryLoader.LoadRegistryAsync();
+            var registryLoader = new RegistryLoader();
+            var registry = await registryLoader.LoadRegistryAsync();
 
             // Assert
             // This may be null if no registry.json is embedded, which is fine for tests
