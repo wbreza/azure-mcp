@@ -512,7 +512,9 @@ public sealed class ServerToolLoader(IMcpDiscoveryStrategy serverDiscoveryStrate
         var clientOptions = new McpClientOptions
         {
             ClientInfo = server.ClientInfo,
-            Capabilities = new ClientCapabilities(),
+            // Proxy all capabilities from the host server to ensure child servers
+            // have access to the same features as the host (sampling, progress, etc.)
+            Capabilities = server.ClientCapabilities ?? new ClientCapabilities(),
         };
 
         return clientOptions;
